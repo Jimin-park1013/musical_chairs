@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import GameMusicController from "../../../components/GameMusicController";
 
-const CHAIR_COUNT_START = 20; // 初始椅子數量（比玩家數量少1~3）
+const CHAIR_COUNT_START = 20;
 const PLAYER_AREA_WIDTH = 600;
 const PLAYER_AREA_HEIGHT = 400;
 const CHAIR_SIZE = 60;
 
-// 取得隨機位置，避免重疊
 function getRandomPosition(existingPositions, width, height, size) {
   const maxAttempts = 100;
   let attempt = 0;
@@ -27,7 +27,6 @@ function getRandomPosition(existingPositions, width, height, size) {
 }
 
 export default function GamePage({ players = [], onGameEnd }) {
-  // 模擬玩家資料
   const simulatedPlayers = [
     { id: "1", nickname: "玩家1", status: "playing" },
     { id: "2", nickname: "玩家2", status: "playing" },
@@ -37,12 +36,13 @@ export default function GamePage({ players = [], onGameEnd }) {
   ];
 
   const [playersState, setPlayersState] = useState(simulatedPlayers);
-  const [gameState, setGameState] = useState("countdown"); // countdown, playing, waiting, ended
+  const [gameState, setGameState] = useState("countdown");
   const [countdown, setCountdown] = useState(3);
-  const [chairs, setChairs] = useState([]); // [{id, x, y, occupantId?}]
+  const [chairs, setChairs] = useState([]);
   const [message, setMessage] = useState("");
+  const [musicTrigger, setMusicTrigger] = useState(false);
+  const [eliminatedNames, setEliminatedNames] = useState([]);
 
-  // 初始化椅子位置
   useEffect(() => {
     const totalPlayers = playersState.length;
     const chairsCount = totalPlayers - (Math.floor(Math.random() * 3) + 1);
@@ -59,18 +59,31 @@ export default function GamePage({ players = [], onGameEnd }) {
     }
     setChairs(newChairs);
 
-    // 重置玩家座位狀態
     setPlayersState((prev) =>
       prev.map((p) => ({ ...p, chairId: null }))
     );
   }, []);
 
-  // 倒數計時
+  useEffect(() => {
+    if (gameState === "countdown") {
+      setMusicTrigger(true);
+    }
+  }, [gameState]);
+
+  const handleMusicStop = () => {
+    setGameState("waiting");
+    setMessage("音樂停止！快搶椅子！");
+    setMusicTrigger(false);
+
+    setTimeout(() => {
+      nextRound();
+    }, 5000); // 等待 5 秒自動進入下一輪
+  };
+
   useEffect(() => {
     if (gameState === "countdown") {
       if (countdown === 0) {
-        setGameState("waiting");
-        setMessage("音樂停止！快搶椅子！");
+        setCountdown(3);
       } else {
         const timer = setTimeout(() => setCountdown((prev) => prev - 1), 1000);
         return () => clearTimeout(timer);
@@ -78,7 +91,6 @@ export default function GamePage({ players = [], onGameEnd }) {
     }
   }, [countdown, gameState]);
 
-  // 玩家搶椅子邏輯
   const handleChairClick = (chairId) => {
     if (gameState !== "waiting") return;
 
@@ -86,7 +98,7 @@ export default function GamePage({ players = [], onGameEnd }) {
       const chair = prevChairs.find((c) => c.id === chairId);
       if (chair?.occupantId) return prevChairs;
 
-      const playerId = "1"; // 假設當前玩家ID為1
+      const playerId = "1";
 
       return prevChairs.map((c) =>
         c.id === chairId ? { ...c, occupantId: playerId } : c
@@ -94,7 +106,6 @@ export default function GamePage({ players = [], onGameEnd }) {
     });
   };
 
-  // 同步更新玩家的 chairId
   useEffect(() => {
     const occupantMap = new Map();
     chairs.forEach((chair) => {
@@ -110,7 +121,6 @@ export default function GamePage({ players = [], onGameEnd }) {
     );
   }, [chairs]);
 
-  // 下一回合或結束遊戲判斷
   const nextRound = () => {
     const playingPlayers = playersState.filter((p) => p.status === "playing");
     const playersWithChair = playersState.filter((p) => p.chairId != null);
@@ -118,14 +128,18 @@ export default function GamePage({ players = [], onGameEnd }) {
       (p) => !playersWithChair.some((pw) => pw.id === p.id)
     );
 
+    let updatedPlayers = playersState;
     if (eliminated.length > 0) {
-      const updatedPlayers = playersState.map((p) =>
+      updatedPlayers = playersState.map((p) =>
         eliminated.some((e) => e.id === p.id) ? { ...p, status: "eliminated" } : p
       );
       setPlayersState(updatedPlayers);
+      setEliminatedNames(eliminated.map((p) => p.nickname));
+    } else {
+      setEliminatedNames([]);
     }
 
-    const alivePlayers = playersState.filter((p) => p.status === "playing");
+    const alivePlayers = updatedPlayers.filter((p) => p.status === "playing");
     if (alivePlayers.length <= 1) {
       setGameState("ended");
       setMessage(`遊戲結束！冠軍是 ${alivePlayers[0]?.nickname || "無人"}`);
@@ -133,44 +147,40 @@ export default function GamePage({ players = [], onGameEnd }) {
       return;
     }
 
-    const removeCount = Math.min(
-      Math.floor(Math.random() * 3) + 1,
-      chairs.length
-    );
+    const removeCount = Math.min(Math.floor(Math.random() * 3) + 1, chairs.length);
     const newChairs = chairs.slice(0, chairs.length - removeCount);
 
-    const resetPlayers = playersState.map((p) =>
+    const resetPlayers = updatedPlayers.map((p) =>
       p.status === "playing" ? { ...p, chairId: null } : p
     );
 
     setChairs(newChairs);
     setPlayersState(resetPlayers);
-
     setCountdown(3);
     setGameState("countdown");
-    setMessage("");
+    setMessage(`淘汰玩家：${eliminated.map((e) => e.nickname).join("、") || "無"}，剩下 ${alivePlayers.length} 人`);
   };
 
-  // 玩家淘汰後選擇離開或觀看
   const handlePlayerChoice = (playerId, choice) => {
     if (choice === "leave") {
       setPlayersState((prev) =>
-        prev.map((p) =>
-          p.id === playerId ? { ...p, status: "left" } : p
-        )
+        prev.map((p) => (p.id === playerId ? { ...p, status: "left" } : p))
       );
     } else if (choice === "watch") {
       setPlayersState((prev) =>
-        prev.map((p) =>
-          p.id === playerId ? { ...p, status: "watching" } : p
-        )
+        prev.map((p) => (p.id === playerId ? { ...p, status: "watching" } : p))
       );
     }
   };
 
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      {/* 左欄：玩家列表 */}
+      <GameMusicController
+        isHost={true}
+        startTrigger={musicTrigger}
+        onMusicStop={handleMusicStop}
+      />
+
       <div style={{ width: 250, borderRight: "1px solid #ccc", padding: "1rem", overflowY: "auto" }}>
         <h2>玩家列表</h2>
         <ul style={{ listStyle: "none", padding: 0 }}>
@@ -187,16 +197,12 @@ export default function GamePage({ players = [], onGameEnd }) {
           ))}
         </ul>
         <hr />
-        <div>{message}</div>
-        {gameState === "waiting" && (
-          <button onClick={nextRound}>下一輪</button>
-        )}
+        <div style={{ fontWeight: "bold", marginTop: 10 }}>{message}</div>
         {gameState === "ended" && (
           <button onClick={() => window.location.reload()}>重新開始遊戲</button>
         )}
       </div>
 
-      {/* 右欄：椅子遊戲區 */}
       <div
         style={{
           position: "relative",
@@ -209,7 +215,6 @@ export default function GamePage({ players = [], onGameEnd }) {
           userSelect: "none",
         }}
       >
-        {/* 倒數顯示 */}
         {gameState === "countdown" && (
           <div
             style={{
@@ -227,7 +232,6 @@ export default function GamePage({ players = [], onGameEnd }) {
           </div>
         )}
 
-        {/* 椅子 */}
         {chairs.map((chair) => (
           <div
             key={chair.id}
@@ -253,7 +257,6 @@ export default function GamePage({ players = [], onGameEnd }) {
           </div>
         ))}
 
-        {/* 搶到椅子玩家名稱 */}
         {chairs.map((chair) => {
           if (!chair.occupantId) return null;
           const occupant = playersState.find((p) => p.id === chair.occupantId);
