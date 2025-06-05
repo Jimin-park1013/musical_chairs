@@ -4,7 +4,7 @@ import { Server } from "socket.io";
 const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "http://localhost:3000", // 你前端網址
   },
 });
 
@@ -13,7 +13,7 @@ const rooms = {}; // { roomId: { id, host, players: [] } }
 io.on("connection", (socket) => {
   console.log("使用者連線:", socket.id);
 
-  // 房間清單
+  // 取得房間清單（可用於房間列表頁面）
   socket.on("getRoomList", () => {
     socket.emit("roomList", Object.values(rooms));
   });
@@ -21,63 +21,98 @@ io.on("connection", (socket) => {
   // 加入房間
   socket.on("joinRoom", ({ nickname, roomId }, callback) => {
     if (!rooms[roomId]) {
-      // 新開房
       rooms[roomId] = {
         id: roomId,
-        host: nickname,
+        host: socket.id,
         players: [],
       };
     }
-
+  
     const room = rooms[roomId];
-    // 防重複加入
+  
     if (room.players.find((p) => p.id === socket.id)) {
-      callback(false);
+      if (typeof callback === "function") callback(false);
       return;
     }
-
+  
     room.players.push({
       id: socket.id,
       nickname,
       ready: false,
     });
-
+  
     socket.join(roomId);
-    io.to(roomId).emit("roomUpdate", room);
+  
+    if (typeof callback === "function") callback(true);
+  
+    io.to(roomId).emit("roomData", {
+      ...room,
+      selfId: socket.id,
+    });
+  
     io.emit("roomList", Object.values(rooms));
-    callback(true);
   });
-
-  // 加 20 假玩家
-  socket.on("addFakePlayers", (roomId) => {
+  
+  // 玩家切換準備狀態
+  socket.on("toggleReady", ({ roomId }) => {
     const room = rooms[roomId];
-    if (room) {
-      for (let i = 0; i < 20; i++) {
-        room.players.push({
-          id: `fake_${Date.now()}_${i}`,
-          nickname: `虛擬玩家${i + 1}`,
-          ready: true,
-        });
+    if (!room) return;
+
+    room.players = room.players.map((p) => {
+      if (p.id === socket.id) {
+        return { ...p, ready: !p.ready };
       }
-      io.to(roomId).emit("roomUpdate", room);
-      io.emit("roomList", Object.values(rooms));
-    }
+      return p;
+    });
+
+    io.to(roomId).emit("roomData", {
+      ...room,
+      selfId: socket.id,
+    });
   });
 
-  // 離線移除玩家
+  // 遊戲開始事件（可擴充遊戲邏輯）
+  socket.on("startGame", ({ roomId }) => {
+    const room = rooms[roomId];
+    if (!room) return;
+
+    const allReady = room.players.every((p) => p.ready);
+    if (!allReady) {
+      socket.emit("errorMsg", "所有玩家必須準備才能開始遊戲");
+      return;
+    }
+
+    // 這裡你可以加入遊戲開始邏輯
+
+    io.to(roomId).emit("gameStarted");
+  });
+
+  // 離線自動移除玩家
   socket.on("disconnect", () => {
     console.log("使用者離線:", socket.id);
+
     for (const roomId in rooms) {
       const room = rooms[roomId];
+      const beforeCount = room.players.length;
+
       room.players = room.players.filter((p) => p.id !== socket.id);
 
-      // 沒人就刪房
+      // 房主離開時重新指派房主
+      if (room.host === socket.id && room.players.length > 0) {
+        room.host = room.players[0].id;
+      }
+
+      // 如果沒人了就刪房間
       if (room.players.length === 0) {
         delete rooms[roomId];
-      } else {
-        io.to(roomId).emit("roomUpdate", room);
+      } else if (beforeCount !== room.players.length) {
+        io.to(roomId).emit("roomData", {
+          ...room,
+          selfId: socket.id, // 離線玩家 id 可能無用，但前端可用現有 socket.id
+        });
       }
     }
+
     io.emit("roomList", Object.values(rooms));
   });
 });
