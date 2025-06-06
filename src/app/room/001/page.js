@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import io from "socket.io-client";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 
 const socket = io("http://localhost:4000");
 
 export default function RoomPage() {
   const router = useRouter();
+  const params = useParams();
+  const roomId = params.id;
   const [nickname, setNickname] = useState("");
   const [room, setRoom] = useState(null);
   const [joined, setJoined] = useState(false);
@@ -23,54 +25,25 @@ export default function RoomPage() {
     }
     setNickname(storedNick);
 
-    socket.emit("joinRoom", { roomId: "001", nickname: storedNick }, (success) => {
-      if (!success) {
-        alert("加入房間失敗");
-        router.push("/");
-        return;
-      }
+    socket.emit("joinRoom", { roomId, nickname: storedNick });
+
+    socket.on("roomUpdate", (roomData) => {
+      setRoom(roomData);
       setJoined(true);
+      setIsHost(roomData.host === storedNick);
     });
 
-    socket.on("roomData", (data) => {
-      setRoom(data);
-      setIsHost(data.host === socket.id);
-    });
-
-    socket.on("errorMsg", (msg) => {
-      alert(msg);
-      router.push("/");
-    });
-
-    // 遊戲開始時 (可以跳轉或顯示訊息)
-    socket.on("gameStarted", () => {
-      router.push(`/game/${room.id}`);
+    socket.on("gameStart", () => {
+      router.push(`/game/001`);
     });
 
     return () => {
-      socket.off("roomData");
-      socket.off("errorMsg");
-      socket.off("gameStarted");
+      socket.off("roomUpdate");
+      socket.off("gameStart");
     };
-  }, [router]);
+  }, [roomId, router]);
 
-  const toggleReady = () => {
-    if (!room) return;
-    socket.emit("toggleReady", { roomId: room.id });
-  };
-
-  const allReady = room?.players?.every((p) => p.ready) ?? false;
-
-  const startGame = () => {
-    if (!allReady) {
-      setStartMessage("所有玩家必須準備才能開始遊戲");
-      setTimeout(() => setStartMessage(""), 3000);
-      return;
-    }
-    socket.emit("startGame", { roomId: room.id });
-  };
-
-  if (!joined) {
+  if (!joined || !room) {
     return (
       <div style={{ padding: "2rem", textAlign: "center" }}>
         <h2>加入中...</h2>
@@ -78,28 +51,34 @@ export default function RoomPage() {
     );
   }
 
+  const toggleReady = () => {
+    socket.emit("toggleReady", { roomId, nickname });
+  };
+  const handleJoin = () => {
+    if (!nickname) return alert("請輸入暱稱");
+    localStorage.setItem("nickname", nickname); // 這裡存暱稱
+    socket.emit("joinRoom", { roomId, nickname });
+  };
+  
+  const allReady = room.players.every((p) => p.ready);
+
+  const startGame = () => {
+    if (!allReady) {
+      setStartMessage("所有玩家必須準備才能開始遊戲");
+      setTimeout(() => setStartMessage(""), 3000);
+      return;
+    }
+    socket.emit("startGame", { roomId });
+  };
+
   return (
-    <div
-      style={{
-        padding: "2rem",
-        maxWidth: 700,
-        margin: "auto",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
+    <div style={{ padding: "2rem", maxWidth: 700, margin: "auto", fontFamily: "Arial, sans-serif" }}>
       <h1 style={{ textAlign: "center" }}>房間 {room.id}</h1>
       <p style={{ textAlign: "center", fontWeight: "bold" }}>
         容量：{room.players.length} / 20
       </p>
       {startMessage && (
-        <p
-          style={{
-            color: "red",
-            textAlign: "center",
-            fontWeight: "bold",
-            marginBottom: 16,
-          }}
-        >
+        <p style={{ color: "red", textAlign: "center", fontWeight: "bold" }}>
           {startMessage}
         </p>
       )}
@@ -113,8 +92,8 @@ export default function RoomPage() {
         }}
       >
         {room.players.map((p) => {
-          const isSelf = p.id === socket.id;
-          const isHostPlayer = p.id === room.host;
+          const isSelf = p.nickname === nickname;
+          const isHostPlayer = p.nickname === room.host;
 
           return (
             <div
@@ -129,20 +108,11 @@ export default function RoomPage() {
                 textAlign: "center",
               }}
             >
-              <div
-                style={{
-                  fontWeight: "bold",
-                  fontSize: "1.1rem",
-                  marginBottom: 6,
-                }}
-              >
+              <div style={{ fontWeight: "bold", fontSize: "1.1rem", marginBottom: 6 }}>
                 {p.nickname} {isHostPlayer && "(房主)"}
               </div>
               <div style={{ marginBottom: 6 }}>
-                狀態：{" "}
-                <span style={{ color: p.ready ? "green" : "red" }}>
-                  {p.ready ? "已準備" : "未準備"}
-                </span>
+                狀態：<span style={{ color: p.ready ? "green" : "red" }}>{p.ready ? "已準備" : "未準備"}</span>
               </div>
               {isSelf && (
                 <button
@@ -164,6 +134,8 @@ export default function RoomPage() {
           );
         })}
       </div>
+
+      
 
       {isHost && room.players.length > 0 && (
         <div style={{ textAlign: "center", marginTop: 24 }}>
