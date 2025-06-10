@@ -13,7 +13,7 @@ export default function Home() {
   return (
     <div style={{
       height: "100vh",
-      backgroundImage: "url('/images/bg.png')",
+      backgroundImage: "url('/images/bg2.png')",
       backgroundSize: "cover",
       backgroundPosition: "center",
       display: "flex",
