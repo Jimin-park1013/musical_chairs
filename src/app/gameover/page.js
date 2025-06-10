@@ -9,7 +9,7 @@ export default function GameOver() {
     <div
       style={{
         height: "100vh",
-        backgroundColor: "#2f2f2f", // 深灰色背景
+        backgroundImage: "url('/images/lose.png')", // 深灰色背景
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",

@@ -9,14 +9,14 @@ export default function Success() {
     <div
       style={{
         height: "100vh",
-        backgroundColor: "#ECEAE1", // 勝利感淺色背景
+        backgroundImage: "url('/images/win.png')", // 勝利感淺色背景
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
         alignItems: "center",
         gap: 20,
         fontFamily: "'Comic Sans MS', cursive",
-        color: "#000", // 文字用黑色比較好看
+        color: "#FFFFFF", // 文字用黑色比較好看
         padding: "0 20px",
         textAlign: "center",
       }}
@@ -25,7 +25,7 @@ export default function Success() {
         style={{
           fontSize: "64px",
           margin: 0,
-          color: "#F7CB82", // 金黃色標題
+          color: "#FFFFFF", // 金黃色標題
           textShadow: "2px 2px 0 #A77653", // 帶點陰影感覺
         }}
       >
@@ -51,7 +51,7 @@ export default function Success() {
           textShadow: "1px 1px 3px rgba(0,0,0,0.15)",
           marginTop: "10px",
           marginBottom: 10,
-          color: "#000",
+          color: "#FFF",
         }}
       >
         你在 1 分鐘內成功存活，真厲害！
@@ -64,7 +64,7 @@ export default function Success() {
           padding: "12px 24px",
           borderRadius: 20,
           border: "none",
-          backgroundColor: "#788DAC",
+          backgroundImage: "url('/images/win.png')",
           color: "#fff",
           cursor: "pointer",
           boxShadow: "0 4px 6px rgba(0,0,0,0.3)",

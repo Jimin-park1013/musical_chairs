@@ -196,7 +196,7 @@ export default function GameClient() {
         height: "100vh",
         overflow: "hidden",
         position: "relative",
-        backgroundImage: "url('/images/bg.png')",
+        backgroundImage: "url('/images/bg3.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
