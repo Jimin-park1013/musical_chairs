@@ -63,7 +63,7 @@ export default function GameOver() {
           padding: "12px 24px",
           borderRadius: 20,
           border: "none",
-          backgroundColor: "#788DAC",
+          backgroundImage: "url('/images/lose.png')",
           color: "#fff",
           cursor: "pointer",
           boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
